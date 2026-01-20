@@ -1,40 +1,62 @@
 import pandas as pd
 import time
+import numpy as np
 from src.recommender_engine import HybridEngine
 from src.evaluation_metrics import calculate_metrics
+from sklearn.model_selection import train_test_split
+ 
 
-# 1. DATA PREPROCESSING 
-print("Loading MovieLens 1M dataset...") 
+# ---------------- LOAD DATA ----------------
+print("Loading datasets...")
 movies = pd.read_csv('data/movies.csv')
 ratings = pd.read_csv('data/ratings.csv')
 
-# 2. INITIALIZE ENGINE
-engine = HybridEngine(alpha=0.6)
+# ---------------- SPLIT TRAIN/TEST ----------------
+train_df, test_df = train_test_split(ratings, test_size=0.2, random_state=42)
 
-# 3. TRAINING ALGORITHMS
-print("Building Collaborative Filtering Graph...")
-engine.fit_collaborative(ratings)
+# ---------------- INITIALIZE ENGINE ----------------
+engine = HybridEngine(alpha=0.6, k_neighbors=20, hybrid_mode="weighted", similarity="pearson")
 
-print("Extracting Content TF-IDF Features...")
+# ---------------- TRAIN CF & CB ----------------
+print("Fitting Collaborative Filtering...")
+engine.fit_collaborative(train_df)
+
+print("Fitting Content-Based features...")
 engine.fit_content(movies)
 
-# 4. TESTING & PERFORMANCE 
-user_id = 50
+# ---------------- COMPLEXITY ANALYSIS ----------------
+print("\n--- Complexity Analysis ---")
+engine.complexity_analysis()
+
+# ---------------- SELECT TEST USER ----------------
+user_id = 2150
+user_test_items = test_df[test_df['userId'] == user_id]['movieId'].tolist()
+if not user_test_items:
+    user_test_items = [train_df[train_df['userId'] == user_id]['movieId'].iloc[0]]
+
+# ---------------- RECOMMEND ----------------
 start_time = time.time()
 recs = engine.get_recommendations(user_id, n=10)
 end_time = time.time()
 
-# 5. OUTPUT RESULTS
+# ---------------- OUTPUT ----------------
 print(f"\nTop 10 Recommendations for User {user_id}:")
 for i, movie_id in enumerate(recs):
-    title = movies[movies['movieId'] == movie_id]['title'].values[0]
+    title = movies.loc[movies['movieId'] == movie_id, 'title'].values[0]
     print(f"{i+1}. {title}")
 
-runtime = end_time - start_time
-print(f"\n--- Performance Summary ---")
-print(f"Runtime: {runtime:.4f} seconds") # Target: < 1 second 
+# ---------------- EVALUATION ----------------
+metrics = calculate_metrics(recs, user_test_items)
+print("\n--- Evaluation Metrics ---")
+for k, v in metrics.items():
+    print(f"{k}: {v:.4f}")
 
+# ---------------- PERFORMANCE ----------------
+runtime = end_time - start_time
+print(f"\nRuntime: {runtime:.4f} seconds")
 if runtime < 1.0:
-    print("Requirement Met: Latency is under 1 second.")
+    print("Requirement Met: Latency under 1 second.")
 else:
     print("Warning: Latency exceeded 1 second.")
+
+# This is the main script to run the hybrid recommender system, evaluate it, and analyze performance
